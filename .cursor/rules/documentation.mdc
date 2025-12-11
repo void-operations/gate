@@ -1,0 +1,24 @@
+---
+alwaysApply: true
+---
+* Most Important Core Rules
+  * All descriptions, comments, and messages must be written in English
+
+* README Writing Rules
+  * Always in English
+  * Overview and Tutorial should be at the front
+  * License content should be at the end
+  * Do not automatically add detailed content, only add prompts asking me to add it
+    * If content is mentioned as core in requirements, add a recommendation that it is core content and should be added
+
+* Commit Message Rules
+  * Write in summary format (overview style)
+  * Use imperative mood (e.g., "Add feature", "Fix bug", "Update documentation")
+  * Keep it concise and descriptive
+  * First line should be 50 characters or less (if possible)
+  * All commit messages must be in English
+  * Example formats:
+    * "Add user authentication feature"
+    * "Fix agent registration bug"
+    * "Update README with deployment instructions"
+    * "Refactor version management module" 

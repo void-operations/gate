@@ -1,0 +1,154 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  master-backend:
+    name: Master Backend (Python)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd master/backend
+          pip install -r requirements.txt
+      
+      - name: Run linting
+        run: |
+          pip install flake8 black
+          cd master/backend
+          # black --check .
+          # flake8 .
+      
+      - name: Run tests
+        run: |
+          cd master/backend
+          # pytest .
+        continue-on-error: true
+
+  master-frontend:
+    name: Master Frontend (Node.js)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: master/frontend/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd master/frontend
+          npm ci
+      
+      - name: Build frontend
+        run: |
+          cd master/frontend
+          npm run build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: master-frontend-build
+          path: master/frontend/dist
+          retention-days: 7
+
+  agent-windows:
+    name: Agent Build (Windows)
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: |
+          cd agent
+          dotnet restore
+      
+      - name: Build Windows x64
+        run: |
+          cd agent
+          dotnet publish -c Release -r win-x64 `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            --self-contained true `
+            -o ../dist/agent-windows
+      
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-windows-x64
+          path: dist/agent-windows
+          retention-days: 30
+
+  agent-macos:
+    name: Agent Build (macOS)
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        runtime: [osx-x64, osx-arm64]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: |
+          cd agent
+          dotnet restore
+      
+      - name: Build macOS (${{ matrix.runtime }})
+        run: |
+          cd agent
+          dotnet publish -c Release -r ${{ matrix.runtime }} \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            --self-contained true \
+            -o ../dist/agent-macos-${{ matrix.runtime }}
+      
+      - name: Upload macOS build (${{ matrix.runtime }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-macos-${{ matrix.runtime }}
+          path: dist/agent-macos-${{ matrix.runtime }}
+          retention-days: 30
+

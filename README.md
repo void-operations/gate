@@ -1,78 +1,74 @@
-# Master-Agent 배포 자동화 시스템
+# Deployment Automation and Version Management System
 
-개발자를 위한 Master-Agent 아키텍처 기반 배포 및 버전 관리 시스템입니다.
+One-click deployment and version tracking system for developers. Deploy software to target PCs with a single button, automatically record all deployment history, and track software version changes on each PC in real-time.
 
-## 아키텍처
+## Overview
 
-- **Master**: Python 기반 웹 서버 + 웹 프론트엔드 (Agent 관리 및 모니터링)
-- **Agent**: C# 기반 클라이언트 (Windows/macOS 실행 파일)
+This project provides a Master-Agent architecture for automated software deployment and version management. It enables developers to deploy software to Windows PCs and manage firmware files with minimal effort while maintaining a complete audit trail of all deployments.
 
-## 주요 기능
+### Key Features
 
-- **Master 서버**: FastAPI 기반 RESTful API + React 기반 웹 인터페이스
-- **Agent 클라이언트**: Master에 자동 등록 및 하트비트 전송
-- **자동 배포**: 원클릭 배포 프로세스
-- **버전 관리**: 자동 버전 태깅 및 관리
-- **크로스 플랫폼**: Windows, macOS (Intel/Apple Silicon) 지원
+- **One-click deployment**: Deploy software to target PCs with a single button
+- **Deployment history tracking**: Automatically record and track all deployment activities
+- **Version monitoring**: Real-time tracking of software version changes on each PC
+- **Firmware deployment**: Support for Windows executables and firmware files
+- **Cross-platform**: Windows and macOS (Intel/Apple Silicon) support
 
-## 프로젝트 구조
+### Architecture
 
-```
-3project/
-├── master/                 # Master 서버 및 프론트엔드
-│   ├── backend/            # Python FastAPI 서버
-│   │   ├── main.py
-│   │   └── requirements.txt
-│   └── frontend/           # 웹 프론트엔드 (Vite)
-│       ├── src/
-│       ├── index.html
-│       └── package.json
-├── agent/                  # C# Agent 클라이언트
-│   ├── Program.cs
-│   ├── Agent.csproj
-│   └── appsettings.json
-├── scripts/                # 빌드 스크립트
-│   ├── build-agent.sh      # Mac/Linux용 Agent 빌드
-│   ├── build-agent.bat     # Windows용 Agent 빌드
-│   └── init.ps1
-├── config/                 # 설정 파일
-├── dist/                   # 빌드 출력 (gitignore)
-├── deploy.py              # 통합 배포 스크립트
-├── deploy-master.py       # Master 전용 배포
-├── deploy-agent.py        # Agent 전용 배포
-├── version.py             # 버전 관리 유틸리티
-└── requirements.txt       # Python 의존성
-```
+- **Master**: Python-based web server + web frontend (Agent management and monitoring)
+  - Deployed on Linux using Docker and Docker Compose
+  - Provides Agent build artifacts for download
+  - Follows Clean Architecture principles
+- **Agent**: C# based client (Windows/macOS executables)
+  - Auto-registration with Master and heartbeat transmission
+  - Performs deployment tasks and reports status
 
-## 빠른 시작
+## Quick Start
 
-### Master 서버 실행
+### Prerequisites
+
+**Development Environment:**
+- macOS 14+ (development environment)
+- Cursor IDE (recommended) or any other IDE
+- Git, GitHub
+
+**Master:**
+- Python 3.8+
+- Node.js 18+ and npm
+- Docker & Docker Compose (for production deployment)
+
+**Agent:**
+- .NET 8.0 SDK
+- Windows or macOS (build environment)
+
+### Running Master Server
 
 ```bash
-# Master 배포
+# Deploy Master
 python deploy-master.py --version 1.0.0
 
-# Master 서버 실행
+# Run Master server
 cd master/backend
 python main.py
 
-# 프론트엔드 개발 모드 (별도 터미널)
+# Run frontend in development mode (separate terminal)
 cd master/frontend
 npm run dev
 ```
 
-Master는 `http://localhost:8000`에서 실행됩니다.
+Master runs at `http://localhost:8000`.
 
-### Agent 빌드 및 실행
+### Building and Running Agent
 
 ```bash
-# 모든 플랫폼용 Agent 빌드
+# Build Agent for all platforms
 python deploy-agent.py --version 1.0.0
 
-# 또는 특정 플랫폼만
+# Or build for specific platform
 python deploy-agent.py --version 1.0.0 --platform windows
 
-# Agent 실행
+# Run Agent
 # Windows:
 dist/agent-windows/Agent.exe
 
@@ -81,43 +77,162 @@ dist/agent-macos-x64/Agent        # Intel Mac
 dist/agent-macos-arm64/Agent      # Apple Silicon
 ```
 
-## 요구사항
+## Tutorial
 
-### Master
-- Python 3.8+
-- Node.js 18+ 및 npm
-- Git (버전 관리용)
+### Project Structure
 
-### Agent
-- .NET 8.0 SDK
-- Windows 또는 macOS (빌드 환경)
+```
+3project/
+├── master/                 # Master server and frontend
+│   ├── backend/            # Python FastAPI server
+│   │   ├── main.py
+│   │   └── requirements.txt
+│   └── frontend/           # Web frontend (Vite)
+│       ├── src/
+│       ├── index.html
+│       └── package.json
+├── agent/                  # C# Agent client
+│   ├── Program.cs
+│   ├── Agent.csproj
+│   └── appsettings.json
+├── scripts/                # Build scripts
+│   ├── build-agent.sh      # Agent build for Mac/Linux
+│   ├── build-agent.bat     # Agent build for Windows
+│   └── init.ps1            # Project initialization
+├── config/                 # Configuration files
+│   └── config.example.json # Configuration example
+├── dist/                   # Build output (gitignore)
+├── .github/                # GitHub Actions
+│   └── workflows/
+│       └── ci.yml         # CI/CD workflow
+├── deploy.py              # Unified deployment script
+├── deploy-master.py       # Master-only deployment
+├── deploy-agent.py        # Agent-only deployment
+├── version.py             # Version management utility
+├── VERSION                # Current version file
+├── LICENSE                # MIT License
+└── requirements.txt       # Python dependencies
+```
 
-## 개발 가이드
+### Master API Endpoints
 
-### Master API 엔드포인트
+- `GET /api/agents` - List all agents
+- `GET /api/agents/{id}` - Get specific agent
+- `POST /api/agents/register` - Register agent / heartbeat
+- `DELETE /api/agents/{id}` - Unregister agent
+- `GET /api/health` - Health check
 
-- `GET /api/agents` - 모든 Agent 목록 조회
-- `GET /api/agents/{id}` - 특정 Agent 조회
-- `POST /api/agents/register` - Agent 등록/하트비트
-- `DELETE /api/agents/{id}` - Agent 등록 해제
-- `GET /api/health` - 헬스 체크
+### Agent Configuration
 
-### Agent 설정
-
-`agent/appsettings.json`에서 Master URL 등을 설정할 수 있습니다.
+Configure Agent in `agent/appsettings.json`:
 
 ```json
 {
   "MasterUrl": "http://localhost:8000",
   "AgentName": "",
-  "HeartbeatInterval": 10000
+  "HeartbeatInterval": 10000,
+  "Version": "1.0.0"
 }
 ```
 
-## 배포 워크플로우
+### Version Management
 
-1. **버전 업데이트**: `version.py`로 버전 관리
-2. **Master 배포**: `deploy-master.py`로 웹 서버 및 프론트엔드 배포
-3. **Agent 빌드**: `deploy-agent.py`로 실행 파일 생성
-4. **Git 태그**: 자동으로 버전 태그 생성
+The project uses automatic version management system.
 
+**Version Tagging Rule:** `{deployment-stage}-{date}-{number}`
+
+Examples:
+- `production-20250115-001`
+- `staging-20250115-002`
+- `development-20250115-001`
+
+**Usage:**
+```bash
+# Check current version
+cat VERSION
+
+# Manually update version
+python -c "from version import VersionManager; vm = VersionManager(); vm.update_version('1.0.0')"
+
+# Auto-increment version
+python -c "from version import VersionManager; vm = VersionManager(); vm.increment_version('patch')"
+```
+
+### Development Workflow
+
+**Local Deployment:**
+1. Update version using `version.py`
+2. Deploy Master using `deploy-master.py`
+3. Build Agent using `deploy-agent.py`
+4. Git tags are automatically created
+
+**Production Deployment (Docker):**
+Master is deployed on Linux using Docker and Docker Compose:
+
+```bash
+# Deploy Master with Docker Compose (to be implemented)
+docker-compose up -d
+```
+
+Agent build artifacts are deployed together and can be downloaded from Master server.
+
+### CI/CD (GitHub Actions)
+
+The project uses GitHub Actions for automated builds and deployments.
+
+**Triggers:**
+- Push events on `main`, `master`, `develop` branches
+- Pull requests to `main`/`master` branches
+
+**Current Workflow:**
+1. Master Backend: Python linting and testing
+2. Master Frontend: Node.js build and artifact storage
+3. Agent Windows: Windows x64 executable build
+4. Agent macOS: macOS x64/ARM64 executable build
+
+**Build Artifacts:**
+- Agent executables (Windows, macOS x64, macOS ARM64)
+- Master Frontend build artifacts
+- Stored as GitHub Actions artifacts (downloadable)
+
+Workflow file: `.github/workflows/ci.yml`
+
+**Future Plans (to be added per requirements):**
+1. Upload build artifacts to Master automatically
+2. Master-Agent integration tests
+3. Deployment pipeline automation
+
+### Development Principles
+
+**Architecture:**
+- **Clean Architecture**: All code strictly follows Clean Architecture principles
+- **Layer Separation**: Clear separation of domain, application, and infrastructure layers
+
+**Testing:**
+- **Unit tests required**: Always write unit tests when adding functions
+- **Mock usage**: Use mocks for testing external system integrations
+- **Test coverage**: Maintain test coverage for core logic
+
+**Note:** This project is currently a personal development project, so there is no code review process in place.
+
+## Important Notes
+
+**Core features mentioned in requirements (please add detailed documentation):**
+- One-click deployment workflow
+- Deployment history and audit trail
+- Version tracking per PC
+- Firmware file deployment support
+- Material Design theme for frontend (please add implementation details)
+
+**Additional details to be added:**
+- Detailed deployment procedures
+- Configuration options
+- Troubleshooting guide
+- API documentation
+- Agent capabilities and extensions
+
+## License
+
+Copyright (c) 2025 codingbridge.blog
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
