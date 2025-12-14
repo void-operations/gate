@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 namespace Agent;
 
 /// <summary>
-/// Agent - Master 서버에 연결하여 상태를 보고하는 클라이언트
+/// Agent - Client that connects to Master server and reports status
 /// </summary>
 class Program
 {
@@ -22,30 +22,30 @@ class Program
 
     static async Task Main(string[] args)
     {
-        Console.WriteLine($"🚀 Agent 시작");
-        Console.WriteLine($"   이름: {agentName}");
-        Console.WriteLine($"   플랫폼: {agentPlatform}");
-        Console.WriteLine($"   버전: {agentVersion}");
+        Console.WriteLine($"🚀 Agent started");
+        Console.WriteLine($"   Name: {agentName}");
+        Console.WriteLine($"   Platform: {agentPlatform}");
+        Console.WriteLine($"   Version: {agentVersion}");
         Console.WriteLine($"   Master URL: {masterUrl}");
 
-        // 명령줄 인자 파싱
+        // Parse command line arguments
         if (args.Length > 0)
         {
             masterUrl = args[0];
         }
 
-        // Ctrl+C 핸들링
+        // Handle Ctrl+C
         Console.CancelKeyPress += (sender, e) =>
         {
             e.Cancel = true;
             running = false;
-            Console.WriteLine("\n⏹️  종료 중...");
+            Console.WriteLine("\n⏹️  Shutting down...");
         };
 
-        // Master에 등록
+        // Register with Master
         await RegisterToMaster();
 
-        // 주기적으로 하트비트 전송 (10초마다)
+        // Send heartbeat periodically (every 10 seconds)
         var heartbeatTask = Task.Run(async () =>
         {
             while (running)
@@ -58,15 +58,15 @@ class Program
             }
         });
 
-        // 메인 루프
-        Console.WriteLine("✓ Master에 연결됨. 하트비트 전송 중...");
-        Console.WriteLine("  (Ctrl+C로 종료)");
+        // Main loop
+        Console.WriteLine("✓ Connected to Master. Sending heartbeat...");
+        Console.WriteLine("  (Press Ctrl+C to exit)");
 
         await heartbeatTask;
         
-        // 종료 시 등록 해제
+        // Unregister on exit
         await UnregisterFromMaster();
-        Console.WriteLine("✅ Agent 종료됨");
+        Console.WriteLine("✅ Agent stopped");
     }
 
     static async Task RegisterToMaster()
@@ -89,17 +89,17 @@ class Program
             if (response.IsSuccessStatusCode)
             {
                 var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
-                Console.WriteLine($"✓ Master에 등록됨 (ID: {agent?.id})");
+                Console.WriteLine($"✓ Registered with Master (ID: {agent?.id})");
             }
             else
             {
-                Console.WriteLine($"⚠️  등록 실패: {response.StatusCode}");
+                Console.WriteLine($"⚠️  Registration failed: {response.StatusCode}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Master 연결 실패: {ex.Message}");
-            Console.WriteLine("   Master 서버가 실행 중인지 확인하세요.");
+            Console.WriteLine($"❌ Failed to connect to Master: {ex.Message}");
+            Console.WriteLine("   Please check if Master server is running.");
         }
     }
 
@@ -122,7 +122,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️  하트비트 전송 실패: {ex.Message}");
+            Console.WriteLine($"⚠️  Heartbeat failed: {ex.Message}");
         }
     }
 
@@ -132,11 +132,11 @@ class Program
         {
             var agentId = $"{agentPlatform}-{agentName}";
             await httpClient.DeleteAsync($"{masterUrl}/api/agents/{agentId}");
-            Console.WriteLine("✓ Master에서 등록 해제됨");
+            Console.WriteLine("✓ Unregistered from Master");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️  등록 해제 실패: {ex.Message}");
+            Console.WriteLine($"⚠️  Unregistration failed: {ex.Message}");
         }
     }
 
@@ -177,4 +177,3 @@ class Program
         public string status { get; set; }
     }
 }
-

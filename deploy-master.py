@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Master 배포 스크립트
-Python 웹 서버 및 프론트엔드를 배포합니다.
+Master Deployment Script
+Deploys Python web server and frontend.
 """
 
 import argparse
@@ -13,110 +13,109 @@ from version import VersionManager
 
 
 def install_backend_dependencies():
-    """Backend 의존성 설치"""
-    print("📦 Backend 의존성 설치 중...")
+    """Install backend dependencies"""
+    print("📦 Installing backend dependencies...")
     backend_dir = Path("master/backend")
     subprocess.run(
         [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
         cwd=backend_dir,
         check=True
     )
-    print("✓ Backend 의존성 설치 완료")
+    print("✓ Backend dependencies installed")
 
 
 def install_frontend_dependencies():
-    """Frontend 의존성 설치"""
-    print("📦 Frontend 의존성 설치 중...")
+    """Install frontend dependencies"""
+    print("📦 Installing frontend dependencies...")
     frontend_dir = Path("master/frontend")
     
-    # npm이 있는지 확인
+    # Check if npm is available
     try:
         subprocess.run(["npm", "--version"], check=True, capture_output=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print("❌ npm이 설치되어 있지 않습니다.")
-        print("   Node.js와 npm을 설치해주세요: https://nodejs.org/")
+        print("❌ npm is not installed.")
+        print("   Please install Node.js and npm: https://nodejs.org/")
         sys.exit(1)
     
     subprocess.run(["npm", "install"], cwd=frontend_dir, check=True)
-    print("✓ Frontend 의존성 설치 완료")
+    print("✓ Frontend dependencies installed")
 
 
 def build_frontend():
-    """Frontend 빌드"""
-    print("🏗️  Frontend 빌드 중...")
+    """Build frontend"""
+    print("🏗️  Building frontend...")
     frontend_dir = Path("master/frontend")
     subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True)
-    print("✓ Frontend 빌드 완료")
+    print("✓ Frontend build completed")
 
 
 def deploy_master(version: str, production: bool = False):
-    """Master 배포"""
-    print(f"🚀 Master 배포 중... (버전: {version})")
+    """Deploy Master"""
+    print(f"🚀 Deploying Master... (version: {version})")
     
     if production:
-        print("   프로덕션 모드로 실행")
-        # TODO: 프로덕션 배포 로직
-        # 예: systemd 서비스 설정, nginx 설정 등
+        print("   Running in production mode")
+        # TODO: Production deployment logic
+        # Example: systemd service setup, nginx configuration, etc.
     else:
-        print("   개발 모드로 실행")
-        print("   실행: cd master/backend && python main.py")
+        print("   Running in development mode")
+        print("   Run: cd master/backend && python main.py")
     
-    print("✓ Master 배포 준비 완료")
+    print("✓ Master deployment ready")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Master 배포 스크립트")
+    parser = argparse.ArgumentParser(description="Master Deployment Script")
     parser.add_argument(
         "--version",
         type=str,
-        help="배포할 버전 (예: 1.0.0)",
+        help="Version to deploy (e.g., 1.0.0)",
         required=True
     )
     parser.add_argument(
         "--skip-install",
         action="store_true",
-        help="의존성 설치 건너뛰기"
+        help="Skip dependency installation"
     )
     parser.add_argument(
         "--production",
         action="store_true",
-        help="프로덕션 모드로 배포"
+        help="Deploy in production mode"
     )
 
     args = parser.parse_args()
 
     try:
-        # 버전 관리
+        # Version management
         version_manager = VersionManager()
         version_manager.update_version(args.version)
 
-        # 의존성 설치
+        # Install dependencies
         if not args.skip_install:
             install_backend_dependencies()
             install_frontend_dependencies()
 
-        # Frontend 빌드
+        # Build frontend
         build_frontend()
 
-        # 배포
+        # Deploy
         deploy_master(args.version, args.production)
 
-        # Git 태그
+        # Create Git tag
         version_manager.create_tag(args.version)
 
-        print(f"\n✅ Master 배포 완료! 버전 {args.version}")
-        print("\n실행 방법:")
+        print(f"\n✅ Master deployment completed! Version {args.version}")
+        print("\nRun instructions:")
         print("  cd master/backend")
         print("  python main.py")
 
     except subprocess.CalledProcessError as e:
-        print(f"❌ 오류 발생: {e}", file=sys.stderr)
+        print(f"❌ Error occurred: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"❌ 예상치 못한 오류: {e}", file=sys.stderr)
+        print(f"❌ Unexpected error: {e}", file=sys.stderr)
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
-

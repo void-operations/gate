@@ -41,4 +41,17 @@ alwaysApply: true
     * Use Mocks for testing when external system integration is needed
 
 * Requirements
-  * 
+  * Core Model
+    * All requirements must be provided as UI in the web frontend
+    * Stakeholder: Only 1 Software programmer
+    * Releasable Software Management
+      * Can add GitHub releases
+      * Can remove GitHub releases
+    * Agent Management
+      * Can add agents
+      * Can remove agents
+    * Deployment: Can select Agent and Release version to deploy
+      * Can select a version from Releases and an Agent to deploy
+    * Batch Deployment: Can deploy multiple Release software to an Agent at once
+  * Enterprise Model
+    * (To be defined)

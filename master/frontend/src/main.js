@@ -1,14 +1,14 @@
-// Master Frontend - Agent 관리 인터페이스
+// Master Frontend - Agent Management Interface
 import axios from 'axios';
 
 const API_BASE = 'http://localhost:8000/api';
 
-// DOM 요소
+// DOM elements
 const agentsList = document.getElementById('agents-list');
 const healthStatus = document.getElementById('health-status');
 const agentCount = document.getElementById('agent-count');
 
-// 상태 업데이트
+// Update health status
 async function updateHealth() {
     try {
         const response = await axios.get(`${API_BASE}/health`);
@@ -22,7 +22,7 @@ async function updateHealth() {
     }
 }
 
-// Agent 목록 로드
+// Load agents list
 async function loadAgents() {
     try {
         const response = await axios.get(`${API_BASE}/agents`);
@@ -33,7 +33,7 @@ async function loadAgents() {
     }
 }
 
-// Agent 목록 표시
+// Display agents list
 function displayAgents(agents) {
     if (agents.length === 0) {
         agentsList.innerHTML = '<p class="empty">No agents registered</p>';
@@ -56,12 +56,12 @@ function displayAgents(agents) {
     `).join('');
 }
 
-// 초기화
+// Initialize application
 async function init() {
     await updateHealth();
     await loadAgents();
     
-    // 주기적으로 업데이트 (5초마다)
+    // Update periodically (every 5 seconds)
     setInterval(async () => {
         await updateHealth();
         await loadAgents();

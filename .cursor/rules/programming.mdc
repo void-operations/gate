@@ -1,4 +1,4 @@
 ---
 alwaysApply: true
 ---
-* 폴더나 파일을 변경하는 경우 항상 .github/workflows를 확인한다. 그리고 workflows에 현재 폴더 구조를 적용한다
+* When changing folders or files, always check .github/workflows and apply the current folder structure to workflows

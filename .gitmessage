@@ -1,19 +1,24 @@
 # Commit Message Guidelines (see .cursor/rules/documentation.mdc)
-# - Write in summary format (overview style)
+# - Write in BULLET POINT FORMAT (outline style), NOT paragraph format
 # - Use imperative mood (e.g., "Add feature", "Fix bug", "Update documentation")
-# - Keep it concise and descriptive
-# - First line should be 50 characters or less (if possible)
+# - First line should be a brief summary (50 characters or less)
+# - List changes as bullet points (- or *)
 # - All commit messages must be in English
+# - DO NOT write in paragraph or prose format
+#
+# Format:
+# Brief summary (50 chars or less)
+# - First change
+# - Second change
+# - Third change
 #
 # Examples:
-# - "Add user authentication feature"
-# - "Fix agent registration bug"
-# - "Update README with deployment instructions"
-# - "Refactor version management module"
+# Add user authentication feature
+# - Add login endpoint
+# - Add JWT token generation
+# - Update user model
 #
-# <type>(<scope>): <subject>
-#
-# <body>
-#
-# <footer>
+# Fix deployment script error handling
+# - Fix error handling in deploy-agent.py
+# - Add proper error messages
 

@@ -1,6 +1,6 @@
 """
-버전 관리 유틸리티
-프로젝트 버전을 자동으로 관리하고 Git 태그를 생성합니다.
+Version Management Utility
+Automatically manages project version and creates Git tags.
 """
 
 import re
@@ -10,32 +10,32 @@ from typing import Optional
 
 
 class VersionManager:
-    """버전 관리 클래스"""
+    """Version management class"""
 
     def __init__(self, project_root: Optional[Path] = None):
         self.project_root = project_root or Path.cwd()
         self.version_file = self.project_root / "VERSION"
 
     def get_current_version(self) -> Optional[str]:
-        """현재 버전 읽기"""
+        """Get current version"""
         if self.version_file.exists():
             return self.version_file.read_text().strip()
         return None
 
     def validate_version(self, version: str) -> bool:
-        """버전 형식 검증 (semver: x.y.z)"""
+        """Validate version format (semver: x.y.z)"""
         pattern = r'^\d+\.\d+\.\d+$'
         return bool(re.match(pattern, version))
 
     def update_version(self, version: str):
-        """버전 파일 업데이트"""
+        """Update version file"""
         if not self.validate_version(version):
-            raise ValueError(f"유효하지 않은 버전 형식: {version}. 형식: x.y.z")
+            raise ValueError(f"Invalid version format: {version}. Format: x.y.z")
 
-        print(f"📝 버전 업데이트: {self.get_current_version()} -> {version}")
+        print(f"📝 Version update: {self.get_current_version()} -> {version}")
         self.version_file.write_text(version + "\n")
 
-        # Git에 변경사항 커밋 (선택적)
+        # Commit changes to Git (optional)
         try:
             subprocess.run(
                 ["git", "add", str(self.version_file)],
@@ -48,39 +48,39 @@ class VersionManager:
                 capture_output=True
             )
         except subprocess.CalledProcessError:
-            # Git이 없거나 커밋이 실패해도 계속 진행
+            # Continue even if Git is not available or commit fails
             pass
 
     def create_tag(self, version: str):
-        """Git 태그 생성"""
+        """Create Git tag"""
         tag_name = f"v{version}"
-        print(f"🏷️  Git 태그 생성: {tag_name}")
+        print(f"🏷️  Creating Git tag: {tag_name}")
 
         try:
-            # 태그가 이미 존재하는지 확인
+            # Check if tag already exists
             result = subprocess.run(
                 ["git", "tag", "-l", tag_name],
                 capture_output=True,
                 text=True
             )
             if tag_name in result.stdout:
-                print(f"⚠️  태그 {tag_name}가 이미 존재합니다.")
+                print(f"⚠️  Tag {tag_name} already exists.")
                 return
 
-            # 태그 생성
+            # Create tag
             subprocess.run(
                 ["git", "tag", "-a", tag_name, "-m", f"Release {version}"],
                 check=True
             )
-            print(f"✓ 태그 {tag_name} 생성 완료")
+            print(f"✓ Tag {tag_name} created successfully")
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  Git 태그 생성 실패 (계속 진행): {e}")
+            print(f"⚠️  Failed to create Git tag (continuing): {e}")
         except FileNotFoundError:
-            print("⚠️  Git이 설치되어 있지 않습니다. 태그를 생성할 수 없습니다.")
+            print("⚠️  Git is not installed. Cannot create tag.")
 
     def increment_version(self, part: str = "patch") -> str:
         """
-        버전 자동 증가
+        Auto-increment version
         part: 'major', 'minor', 'patch'
         """
         current = self.get_current_version()
@@ -99,9 +99,8 @@ class VersionManager:
         elif part == "patch":
             patch += 1
         else:
-            raise ValueError(f"유효하지 않은 버전 부분: {part}")
+            raise ValueError(f"Invalid version part: {part}")
 
         new_version = f"{major}.{minor}.{patch}"
         self.update_version(new_version)
         return new_version
-

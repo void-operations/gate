@@ -2,18 +2,59 @@
 alwaysApply: true
 ---
 
-* Commit Message Rules (MANDATORY)
-  * When generating commit messages, ALWAYS follow these rules:
-  * Write in summary format (overview style)
-  * Use imperative mood (e.g., "Add feature", "Fix bug", "Update documentation")
-  * Keep first line under 50 characters
-  * Write in English only
-  * Keep it concise and descriptive
+* CRITICAL: Commit Message Format Rules (MANDATORY - STRICTLY ENFORCED)
+  * When generating ANY commit message, you MUST follow this EXACT format:
+  * 
+  * REQUIRED FORMAT (NO EXCEPTIONS):
+  * 1. First line: Brief summary in imperative mood (MAX 50 characters)
+  * 2. Second line: Empty line
+  * 3. Third line onwards: Bullet points starting with "- " (hyphen space)
+  * 4. Each bullet point should be a single action/item
+  * 5. NEVER write in paragraph or prose format
+  * 6. NEVER use sentences like "This commit...", "We updated...", "The changes include..."
+  * 7. ALWAYS use imperative mood: "Add", "Fix", "Update", "Remove", "Refactor"
+  * 8. ALWAYS write in English only
+  * 
+  * FORBIDDEN FORMATS (NEVER USE):
+  * - DO NOT write: "Refactor deployment scripts and backend models to improve clarity..."
+  * - DO NOT write: "This commit adds..." or "We updated..." or "The changes include..."
+  * - DO NOT write multi-sentence paragraphs
+  * - DO NOT exceed 50 characters on first line
+  * - DO NOT use past tense: "Added", "Fixed", "Updated" (use "Add", "Fix", "Update")
   
-* Commit Message Examples
-  * "Add user authentication feature"
-  * "Fix agent registration bug"
-  * "Update README with deployment instructions"
-  * "Refactor version management module"
-  * "Remove unused dependencies"
-  * "Improve error handling in deployment script"
+* REQUIRED Format Template:
+  * [Summary line - max 50 chars]
+  * 
+  * - [First change]
+  * - [Second change]
+  * - [Third change]
+  
+* CORRECT Examples (USE THIS FORMAT):
+  * Example 1:
+  * Refactor deployment scripts and translate to English
+  * 
+  * - Translate all Python scripts to English
+  * - Update backend models structure
+  * - Improve error messages
+  * 
+  * Example 2:
+  * Add release and deployment management
+  * 
+  * - Add Release model and API endpoints
+  * - Add Deployment model with batch support
+  * - Update backend main.py with new routes
+  * 
+  * Example 3:
+  * Update commit message rules to bullet format
+  * 
+  * - Update commit-message.mdc rules
+  * - Update .gitmessage template
+  * - Add explicit format requirements
+  * 
+  * Example 4:
+  * Apply rules and translate code to English
+  * 
+  * - Translate Python deployment scripts
+  * - Translate C# Agent code
+  * - Update commit message format rules
+  * - Add Release and Deployment models

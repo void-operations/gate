@@ -11,14 +11,25 @@ alwaysApply: true
   * Do not automatically add detailed content, only add prompts asking me to add it
     * If content is mentioned as core in requirements, add a recommendation that it is core content and should be added
 
-* Commit Message Rules
-  * Write in summary format (overview style)
-  * Use imperative mood (e.g., "Add feature", "Fix bug", "Update documentation")
-  * Keep it concise and descriptive
-  * First line should be 50 characters or less (if possible)
-  * All commit messages must be in English
-  * Example formats:
-    * "Add user authentication feature"
-    * "Fix agent registration bug"
-    * "Update README with deployment instructions"
-    * "Refactor version management module" 
+* Commit Message Rules (CRITICAL - STRICTLY ENFORCED)
+  * REQUIRED FORMAT (NO EXCEPTIONS):
+  *   Line 1: Brief summary in imperative mood (MAX 50 characters)
+  *   Line 2: Empty line
+  *   Line 3+: Bullet points with "- " prefix
+  * 
+  * FORBIDDEN:
+  *   - DO NOT write paragraphs or prose
+  *   - DO NOT write "This commit...", "We updated...", "The changes include..."
+  *   - DO NOT exceed 50 characters on first line
+  * 
+  * REQUIRED:
+  *   - ALWAYS use imperative mood: "Add", "Fix", "Update", "Remove"
+  *   - ALWAYS use bullet point format
+  *   - ALWAYS write in English
+  * 
+  * Example (CORRECT FORMAT):
+  * Refactor deployment scripts
+  * 
+  * - Translate Python scripts to English
+  * - Update backend models
+  * - Improve error handling 
