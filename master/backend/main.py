@@ -50,6 +50,7 @@ agents_db: dict[str, Agent] = {}
 releases_db: dict[str, Release] = {}
 deployments_db: dict[str, Deployment] = {}
 deployment_history: list[Deployment] = []
+github_token: Optional[str] = None  # Store GitHub token (in production, use secure storage)
 
 
 # Root endpoint
@@ -213,6 +214,36 @@ async def create_deployment(deployment_data: DeploymentCreate):
     # 4. Updating deployment status
     
     return deployment
+
+
+# ==================== User Settings (GitHub Token) ====================
+
+@app.get("/api/settings/github-token")
+async def get_github_token():
+    """Get GitHub token (returns masked token if exists)"""
+    if github_token:
+        # Return masked token for security (show only last 4 characters)
+        masked_token = "***" + github_token[-4:] if len(github_token) > 4 else "***"
+        return {"has_token": True, "token_preview": masked_token}
+    return {"has_token": False}
+
+
+@app.post("/api/settings/github-token")
+async def set_github_token(token_data: dict):
+    """Add or update GitHub token"""
+    global github_token
+    if "token" not in token_data:
+        raise HTTPException(status_code=400, detail="Token is required")
+    github_token = token_data["token"]
+    return {"message": "GitHub token saved successfully"}
+
+
+@app.delete("/api/settings/github-token")
+async def delete_github_token():
+    """Remove GitHub token"""
+    global github_token
+    github_token = None
+    return {"message": "GitHub token removed successfully"}
 
 
 # ==================== Health Check ====================

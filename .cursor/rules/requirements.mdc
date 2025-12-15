@@ -52,8 +52,13 @@ alwaysApply: true
     * All requirements must be provided as UI in the web frontend
     * Stakeholder: Only 1 Software programmer
     * Releasable Software Management
+      * Use PostgreSQL 
+        * In Development, use sqlite3
+        * Use ORM for version management 
       * Can add GitHub releases
+        * Github release url (e.g., https://github.com/jameskwon07/3project/releases/) can be entered to query versions and fetch artifacts from within
       * Can remove GitHub releases
+        * Even after deletion, it remains in the Database. 
     * Agent Management
       * Can add agents
       * Can remove agents
