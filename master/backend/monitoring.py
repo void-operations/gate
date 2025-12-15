@@ -134,4 +134,3 @@ def get_pending_deployment_metrics() -> Dict:
     metrics["error_rate"] = sum(all_errors.values()) / total_count if total_count > 0 else 0
     
     return metrics
-
