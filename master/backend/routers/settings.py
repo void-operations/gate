@@ -4,7 +4,7 @@ Settings Management Routes
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from datetime import datetime
 
 from database import get_db
@@ -59,7 +59,8 @@ async def delete_github_token(db: AsyncSession = Depends(get_db)):
     settings_db = result.scalar_one_or_none()
     
     if settings_db:
-        db.delete(settings_db)
+        # Use delete statement for SQLAlchemy 2.0 async
+        await db.execute(delete(SettingsDB).where(SettingsDB.key == "github_token"))
         await db.commit()
     
     return {"message": "GitHub token removed successfully"}

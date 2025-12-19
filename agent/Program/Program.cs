@@ -16,13 +16,18 @@ namespace Agent;
 /// </summary>
 class Program
 {
-    private static readonly HttpClient httpClient = new HttpClient();
+    private static readonly HttpClient httpClient = new HttpClient()
+    {
+        Timeout = TimeSpan.FromSeconds(10) // Reduce timeout from default 100s to 10s
+    };
     private static string masterUrl = "http://localhost:8000";
     private static string agentName = Environment.MachineName;
     private static string agentPlatform = GetPlatform();
     private static string agentVersion = "1.0.0";
     private static string agentId = "";
     private static bool running = true;
+    private static CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+    private static bool shutdownMessageShown = false;
 
     static async Task Main(string[] args)
     {
@@ -42,42 +47,69 @@ class Program
         Console.CancelKeyPress += (sender, e) =>
         {
             e.Cancel = true;
+            if (!shutdownMessageShown)
+            {
+                shutdownMessageShown = true;
+                Console.WriteLine("\n⏹️  Shutting down...");
+            }
             running = false;
-            Console.WriteLine("\n⏹️  Shutting down...");
+            cancellationTokenSource.Cancel();
         };
 
         // Register with Master
-        await RegisterToMaster();
-
-        // Send heartbeat and check for deployments periodically (every 10 seconds)
-        var heartbeatTask = Task.Run(async () =>
+        bool registered = await RegisterToMaster();
+        
+        if (!registered)
         {
-            while (running)
-            {
-                await Task.Delay(10000);
-                if (running)
-                {
-                    await SendHeartbeat();
-                    await CheckForDeployment();
-                }
-            }
-        });
+            Console.WriteLine("\n❌ Failed to connect to Master server.");
+            Console.WriteLine("   Please ensure Master server is running at " + masterUrl);
+            Console.WriteLine("   Start Master server with: cd gate/master && python run.py");
+            Environment.Exit(1);
+            return;
+        }
 
         // Main loop
         Console.WriteLine("✓ Connected to Master. Sending heartbeat...");
         Console.WriteLine("  (Press Ctrl+C to exit)");
 
-        await heartbeatTask;
-        
-        // Unregister on exit
-        await UnregisterFromMaster();
-        Console.WriteLine("✅ Agent stopped");
+        // Send heartbeat and check for deployments periodically (every 10 seconds)
+        try
+        {
+            while (running && !cancellationTokenSource.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(10000, cancellationTokenSource.Token);
+                    if (running && !cancellationTokenSource.Token.IsCancellationRequested)
+                    {
+                        await SendHeartbeat();
+                        await CheckForDeployment();
+                    }
+                }
+                catch (TaskCanceledException)
+                {
+                    // Expected when cancellation is requested
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error in main loop: {ex.Message}");
+        }
+        finally
+        {
+            // Unregister on exit
+            await UnregisterFromMaster();
+            Console.WriteLine("✅ Agent stopped");
+        }
     }
 
-    static async Task RegisterToMaster()
+    static async Task<bool> RegisterToMaster()
     {
         try
         {
+            Console.WriteLine("🔌 Connecting to Master server...");
             var request = new
             {
                 name = agentName,
@@ -86,26 +118,49 @@ class Program
                 ip_address = GetLocalIPAddress()
             };
 
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var response = await httpClient.PostAsJsonAsync(
                 $"{masterUrl}/api/agents/register",
-                request
-            );
+                request,
+                cts.Token
+            ).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
                 var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
                 agentId = agent?.id ?? "";
                 Console.WriteLine($"✓ Registered with Master (ID: {agentId})");
+                return true;
             }
             else
             {
+                var errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"⚠️  Registration failed: {response.StatusCode}");
+                if (!string.IsNullOrEmpty(errorContent))
+                {
+                    Console.WriteLine($"   Response: {errorContent}");
+                }
+                return false;
             }
+        }
+        catch (TaskCanceledException)
+        {
+            Console.WriteLine($"❌ Connection timeout: Master server did not respond within 10 seconds");
+            return false;
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"❌ Network error: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"   Inner exception: {ex.InnerException.Message}");
+            }
+            return false;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Failed to connect to Master: {ex.Message}");
-            Console.WriteLine("   Please check if Master server is running.");
+            return false;
         }
     }
 

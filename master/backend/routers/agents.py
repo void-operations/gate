@@ -4,7 +4,7 @@ Agent Management Routes
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from typing import List
 from datetime import datetime
 import uuid
@@ -152,7 +152,8 @@ async def delete_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
     if not agent_db:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    db.delete(agent_db)
+    # Use delete statement for SQLAlchemy 2.0 async
+    await db.execute(delete(AgentDB).where(AgentDB.id == agent_id))
     await db.commit()
     return {"message": "Agent deleted"}
 

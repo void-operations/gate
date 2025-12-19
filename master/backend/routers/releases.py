@@ -4,7 +4,7 @@ Release Management Routes
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from typing import List
 from datetime import datetime
 import re
@@ -121,7 +121,8 @@ async def delete_release(release_id: str, db: AsyncSession = Depends(get_db)):
     if not release_db:
         raise HTTPException(status_code=404, detail="Release not found")
     
-    db.delete(release_db)
+    # Use delete statement for SQLAlchemy 2.0 async
+    await db.execute(delete(ReleaseDB).where(ReleaseDB.id == release_id))
     await db.commit()
     return {"message": "Release deleted"}
 

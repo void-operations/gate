@@ -8,6 +8,7 @@ import subprocess
 import sys
 import signal
 import os
+import shutil
 from pathlib import Path
 
 # Get project root
@@ -38,16 +39,39 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
+def find_npm():
+    """Find npm executable, handling Windows"""
+    npm = shutil.which("npm")
+    if npm:
+        return npm
+    # Try npm.cmd on Windows
+    npm_cmd = shutil.which("npm.cmd")
+    if npm_cmd:
+        return npm_cmd
+    return None
+
+
 def check_and_install_dependencies():
     """Check and install dependencies if needed"""
+    # Check if npm is available
+    npm = find_npm()
+    if not npm:
+        print("❌ Error: npm is not installed or not in PATH")
+        print("   Please install Node.js from https://nodejs.org/")
+        print("   npm comes bundled with Node.js")
+        sys.exit(1)
+    
     # Check frontend dependencies
     node_modules = frontend_dir / "node_modules"
     if not node_modules.exists():
         print("📦 Installing frontend dependencies...")
+        # Use shell=True on Windows for better compatibility
+        use_shell = os.name == 'nt'
         subprocess.run(
-            ["npm", "install"],
+            [npm, "install"],
             cwd=frontend_dir,
-            check=True
+            check=True,
+            shell=use_shell
         )
     
     subprocess.run(
@@ -86,11 +110,19 @@ def main():
 
     # Start frontend (React + Vite)
     print("📦 Starting frontend dev server (React + Vite)...")
+    npm = find_npm()
+    if not npm:
+        print("❌ Error: npm is not installed or not in PATH")
+        print("   Please install Node.js from https://nodejs.org/")
+        sys.exit(1)
+    
+    use_shell = os.name == 'nt'
     frontend_process = subprocess.Popen(
-        ["npm", "run", "dev"],
+        [npm, "run", "dev"],
         cwd=frontend_dir,
         stdout=sys.stdout,
         stderr=sys.stderr,
+        shell=use_shell
     )
     processes.append(frontend_process)
 
