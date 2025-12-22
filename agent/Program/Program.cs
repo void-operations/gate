@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace Agent;
@@ -16,24 +17,22 @@ namespace Agent;
 /// </summary>
 class Program
 {
-    private static readonly HttpClient httpClient = new HttpClient()
-    {
-        Timeout = TimeSpan.FromSeconds(10) // Reduce timeout from default 100s to 10s
-    };
 #if DEBUG
     private static readonly bool IsDebugMode = true;
 #else
     private static readonly bool IsDebugMode = false;
 #endif
 
+    private static readonly HttpClient httpClient = new HttpClient()
+    {
+        DefaultRequestHeaders = { { "User-Agent", "VoidOps-Agent/1.0.0" } }
+    };
     private static string masterUrl = "http://localhost:8000";
     private static string agentName = Environment.MachineName;
     private static string agentPlatform = GetPlatform();
     private static string agentVersion = "1.0.0";
     private static string agentId = "";
     private static bool running = true;
-    private static CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-    private static bool shutdownMessageShown = false;
 
     static void LogDebug(string message)
     {
@@ -83,69 +82,42 @@ class Program
         Console.CancelKeyPress += (sender, e) =>
         {
             e.Cancel = true;
-            if (!shutdownMessageShown)
-            {
-                shutdownMessageShown = true;
-                Console.WriteLine("\n⏹️  Shutting down...");
-            }
             running = false;
-            cancellationTokenSource.Cancel();
+            Console.WriteLine("\n⏹️  Shutting down...");
         };
 
         // Register with Master
-        bool registered = await RegisterToMaster();
-        
-        if (!registered)
+        await RegisterToMaster();
+
+        // Send heartbeat and check for deployments periodically (every 10 seconds)
+        var heartbeatTask = Task.Run(async () =>
         {
-            Console.WriteLine("\n❌ Failed to connect to Master server.");
-            Console.WriteLine("   Please ensure Master server is running at " + masterUrl);
-            Console.WriteLine("   Start Master server with: cd gate/master && python run.py");
-            Environment.Exit(1);
-            return;
-        }
+            while (running)
+            {
+                await Task.Delay(10000);
+                if (running)
+                {
+                    await SendHeartbeat();
+                    await CheckForDeployment();
+                }
+            }
+        });
 
         // Main loop
         Console.WriteLine("✓ Connected to Master. Sending heartbeat...");
         Console.WriteLine("  (Press Ctrl+C to exit)");
 
-        // Send heartbeat and check for deployments periodically (every 10 seconds)
-        try
-        {
-            while (running && !cancellationTokenSource.Token.IsCancellationRequested)
-            {
-                try
-                {
-                    await Task.Delay(10000, cancellationTokenSource.Token);
-                    if (running && !cancellationTokenSource.Token.IsCancellationRequested)
-                    {
-                        await SendHeartbeat();
-                        await CheckForDeployment();
-                    }
-                }
-                catch (TaskCanceledException)
-                {
-                    // Expected when cancellation is requested
-                    break;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error in main loop: {ex.Message}");
-        }
-        finally
-        {
-            // Unregister on exit
-            await UnregisterFromMaster();
-            Console.WriteLine("✅ Agent stopped");
-        }
+        await heartbeatTask;
+        
+        // Unregister on exit
+        await UnregisterFromMaster();
+        Console.WriteLine("✅ Agent stopped");
     }
 
-    static async Task<bool> RegisterToMaster()
+    static async Task RegisterToMaster()
     {
         try
         {
-            Console.WriteLine("🔌 Connecting to Master server...");
             var request = new
             {
                 name = agentName,
@@ -154,49 +126,26 @@ class Program
                 ip_address = GetLocalIPAddress()
             };
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var response = await httpClient.PostAsJsonAsync(
                 $"{masterUrl}/api/agents/register",
-                request,
-                cts.Token
-            ).ConfigureAwait(false);
+                request
+            );
 
             if (response.IsSuccessStatusCode)
             {
                 var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
                 agentId = agent?.id ?? "";
                 Console.WriteLine($"✓ Registered with Master (ID: {agentId})");
-                return true;
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"⚠️  Registration failed: {response.StatusCode}");
-                if (!string.IsNullOrEmpty(errorContent))
-                {
-                    Console.WriteLine($"   Response: {errorContent}");
-                }
-                return false;
             }
-        }
-        catch (TaskCanceledException)
-        {
-            Console.WriteLine($"❌ Connection timeout: Master server did not respond within 10 seconds");
-            return false;
-        }
-        catch (HttpRequestException ex)
-        {
-            Console.WriteLine($"❌ Network error: {ex.Message}");
-            if (ex.InnerException != null)
-            {
-                Console.WriteLine($"   Inner exception: {ex.InnerException.Message}");
-            }
-            return false;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Failed to connect to Master: {ex.Message}");
-            return false;
+            Console.WriteLine("   Please check if Master server is running.");
         }
     }
 
@@ -288,14 +237,24 @@ class Program
             }
             
             // Process each release in the deployment
-            foreach (var releaseId in deployment.release_ids)
+            for (int i = 0; i < deployment.release_ids.Count; i++)
             {
+                var releaseId = deployment.release_ids[i];
+                // Get the corresponding tag from release_tags (deployment creation time selected tag)
+                var selectedTag = deployment.release_tags != null && i < deployment.release_tags.Count 
+                    ? deployment.release_tags[i] 
+                    : null;
+                
                 Console.WriteLine($"📦 Processing release: {releaseId}");
                 
                 // 1. Fetch release details from Master
                 if (IsDebugMode)
                 {
                     LogDebug($"Fetching release details for release ID: {releaseId}");
+                    if (!string.IsNullOrEmpty(selectedTag))
+                    {
+                        LogDebug($"Selected tag from deployment: {selectedTag}");
+                    }
                 }
                 var release = await FetchReleaseDetails(releaseId);
                 if (release == null)
@@ -307,20 +266,24 @@ class Program
                     throw new Exception($"Failed to fetch release details for {releaseId}");
                 }
                 
+                // Use the tag from deployment if available, otherwise fall back to release.tag_name
+                var tagToUse = !string.IsNullOrEmpty(selectedTag) ? selectedTag : release.tag_name;
+                
                 if (IsDebugMode)
                 {
                     LogDebug($"Release details fetched successfully");
                     LogDebug($"  Release ID: {release.id}");
-                    LogDebug($"  Release tag: {release.tag_name}");
+                    LogDebug($"  Release tag (from DB): {release.tag_name}");
+                    LogDebug($"  Tag to use for download: {tagToUse}");
                     LogDebug($"  Download URL: {release.download_url}");
                 }
                 
-                // 2. Download release artifacts from GitHub
+                // 2. Download release artifacts from GitHub using the selected tag
                 if (IsDebugMode)
                 {
                     LogDebug($"Starting download of release artifacts");
                 }
-                var downloadPath = await DownloadReleaseArtifacts(release);
+                var downloadPath = await DownloadReleaseArtifacts(release, tagToUse);
                 if (string.IsNullOrEmpty(downloadPath))
                 {
                     if (IsDebugMode)
@@ -419,13 +382,18 @@ class Program
         }
     }
     
-    static async Task<string?> DownloadReleaseArtifacts(ReleaseResponse release)
+    static async Task<string?> DownloadReleaseArtifacts(ReleaseResponse release, string tag)
     {
         try
         {
             if (string.IsNullOrEmpty(release.download_url))
             {
                 throw new Exception("Release download URL is empty");
+            }
+            
+            if (string.IsNullOrEmpty(tag))
+            {
+                throw new Exception("Release tag name is empty");
             }
             
             // Extract owner and repo from GitHub URL
@@ -446,35 +414,145 @@ class Program
             var downloadsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".agent", "downloads");
             Directory.CreateDirectory(downloadsDir);
             
-            // For now, we'll download the latest release asset
-            // In a full implementation, we would use GitHub API to get specific release assets
-            // For simplicity, we'll construct a direct download URL for the latest release
-            // This is a placeholder - actual implementation should use GitHub API
-            
             LogInfo($"📥 Downloading from GitHub: {owner}/{repo}");
-            LogInfo($"⚠️  Note: Full GitHub API integration needed for specific release versions");
             
             if (IsDebugMode)
             {
-                LogDebug($"Release tag: {release.tag_name}");
+                LogDebug($"Release tag (from DB): {release.tag_name}");
+                LogDebug($"Tag to use: {tag}");
                 LogDebug($"Release name: {release.name}");
                 LogDebug($"Release version: {release.version}");
                 LogDebug($"Downloads directory: {downloadsDir}");
             }
             
-            // Create a placeholder file path
-            // In production, this should download actual artifacts from GitHub releases
-            var downloadPath = Path.Combine(downloadsDir, $"{repo}-{release.tag_name}");
+            // Fetch release details from GitHub API to get assets using the selected tag
+            var githubApiUrl = $"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}";
+            if (IsDebugMode)
+            {
+                LogDebug($"GitHub API URL: {githubApiUrl}");
+            }
+            
+            // GitHub API requires User-Agent header (already set on httpClient)
+            var githubResponse = await httpClient.GetAsync(githubApiUrl);
+            if (!githubResponse.IsSuccessStatusCode)
+            {
+                var errorContent = await githubResponse.Content.ReadAsStringAsync();
+                if (IsDebugMode)
+                {
+                    LogDebug($"GitHub API error response: {errorContent}");
+                }
+                throw new Exception($"Failed to fetch release from GitHub API: {githubResponse.StatusCode}");
+            }
+            
+            var githubContent = await githubResponse.Content.ReadAsStringAsync();
+            var githubRelease = JsonConvert.DeserializeObject<GitHubReleaseResponse>(githubContent);
+            
+            if (githubRelease == null || githubRelease.assets == null || githubRelease.assets.Count == 0)
+            {
+                throw new Exception($"No assets found for release {tag}");
+            }
             
             if (IsDebugMode)
             {
-                LogDebug($"Expected download path: {downloadPath}");
+                LogDebug($"Found {githubRelease.assets.Count} assets:");
+                foreach (var asset in githubRelease.assets)
+                {
+                    LogDebug($"  - {asset.name} ({asset.size} bytes, {asset.content_type})");
+                }
             }
             
-            // For now, return the path (actual download would happen here)
-            // TODO: Implement actual GitHub release asset download
-            // Simulate async operation
-            await Task.CompletedTask;
+            // Filter out source code archives (only if they contain source code keywords)
+            var sourceCodeKeywords = new[] { "source", "src", "sourcecode" };
+            
+            var executableAssets = githubRelease.assets
+                .Where(asset => 
+                {
+                    var nameLower = asset.name.ToLower();
+                    // Exclude if it's clearly a source code archive (check for keywords first)
+                    if (sourceCodeKeywords.Any(keyword => nameLower.Contains(keyword)))
+                    {
+                        return false;
+                    }
+                    // For .zip, .tar.gz, and .tar files, only exclude if they contain source code keywords
+                    // (already handled above, so these extensions are allowed if no keywords found)
+                    return true;
+                })
+                .ToList();
+            
+            if (executableAssets.Count == 0)
+            {
+                throw new Exception($"No executable assets found (excluding source code) for release {tag}");
+            }
+            
+            // Select the largest asset (likely the main executable/installer) or platform-specific asset
+            GitHubReleaseAsset? selectedAsset = null;
+            
+            // Try to find platform-specific asset first
+            var platformExtensions = agentPlatform == "windows" 
+                ? new[] { ".exe", ".msi", ".zip" }
+                : agentPlatform == "macos"
+                ? new[] { ".dmg", ".pkg", ".app.zip", ".zip" }
+                : new[] { ".deb", ".rpm", ".tar.gz", ".zip" };
+            
+            selectedAsset = executableAssets.FirstOrDefault(asset => 
+                platformExtensions.Any(ext => asset.name.ToLower().EndsWith(ext.ToLower())));
+            
+            // If no platform-specific asset found, select the largest one
+            if (selectedAsset == null)
+            {
+                selectedAsset = executableAssets.OrderByDescending(a => a.size).First();
+            }
+            
+            if (selectedAsset == null)
+            {
+                throw new Exception("Failed to select an asset to download");
+            }
+            
+            if (IsDebugMode)
+            {
+                LogDebug($"Selected asset: {selectedAsset.name} ({selectedAsset.size} bytes)");
+                LogDebug($"Download URL: {selectedAsset.browser_download_url}");
+            }
+            
+            LogInfo($"📦 Downloading asset: {selectedAsset.name}");
+            
+            // Download the asset
+            var downloadResponse = await httpClient.GetAsync(selectedAsset.browser_download_url);
+            if (!downloadResponse.IsSuccessStatusCode)
+            {
+                throw new Exception($"Failed to download asset: {downloadResponse.StatusCode}");
+            }
+            
+            // Determine file extension from content type or file name
+            var fileExtension = Path.GetExtension(selectedAsset.name);
+            if (string.IsNullOrEmpty(fileExtension))
+            {
+                // Try to infer from content type
+                if (selectedAsset.content_type.Contains("zip"))
+                    fileExtension = ".zip";
+                else if (selectedAsset.content_type.Contains("dmg"))
+                    fileExtension = ".dmg";
+                else if (selectedAsset.content_type.Contains("exe"))
+                    fileExtension = ".exe";
+            }
+            
+            var fileName = $"{repo}-{tag}{fileExtension}";
+            var downloadPath = Path.Combine(downloadsDir, fileName);
+            
+            // Save the downloaded file
+            using (var fileStream = new FileStream(downloadPath, FileMode.Create, FileAccess.Write))
+            {
+                await downloadResponse.Content.CopyToAsync(fileStream);
+            }
+            
+            if (IsDebugMode)
+            {
+                var fileInfo = new FileInfo(downloadPath);
+                LogDebug($"Download completed. File size: {fileInfo.Length} bytes");
+                LogDebug($"Saved to: {downloadPath}");
+            }
+            
+            LogInfo($"✓ Downloaded: {fileName}");
             return downloadPath;
         }
         catch (Exception ex)
@@ -483,6 +561,8 @@ class Program
             if (IsDebugMode && release != null)
             {
                 LogDebug($"Release ID: {release.id}");
+                LogDebug($"Release tag (from DB): {release.tag_name}");
+                LogDebug($"Tag used for download: {tag}");
                 LogDebug($"Release download URL: {release.download_url}");
             }
             return null;
@@ -708,5 +788,20 @@ class Program
         public string download_url { get; set; } = "";
         public string description { get; set; } = "";
         public List<string>? assets { get; set; }
+    }
+    
+    class GitHubReleaseAsset
+    {
+        public string name { get; set; } = "";
+        public string browser_download_url { get; set; } = "";
+        public string content_type { get; set; } = "";
+        public long size { get; set; }
+    }
+    
+    class GitHubReleaseResponse
+    {
+        public string tag_name { get; set; } = "";
+        public string name { get; set; } = "";
+        public List<GitHubReleaseAsset> assets { get; set; } = new List<GitHubReleaseAsset>();
     }
 }
