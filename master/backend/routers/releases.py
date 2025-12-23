@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from database import get_db
 from db_models import ReleaseDB, SettingsDB
-from models import Release, ReleaseCreate
+from models import Release, ReleaseCreate, ReleaseUpdate
 
 router = APIRouter(prefix="/api/releases", tags=["releases"])
 
@@ -101,6 +101,42 @@ async def create_release(release_data: ReleaseCreate, db: AsyncSession = Depends
     )
     
     db.add(release_db)
+    await db.commit()
+    await db.refresh(release_db)
+    
+    return Release(
+        id=release_db.id,
+        tag_name=release_db.tag_name,
+        name=release_db.name,
+        version=release_db.version or "",
+        release_date=release_db.release_date,
+        download_url=release_db.download_url,
+        description=release_db.description,
+        assets=release_db.assets or [],
+    )
+
+
+@router.put("/{release_id}", response_model=Release)
+async def update_release(
+    release_id: str,
+    release_data: ReleaseUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a release"""
+    result = await db.execute(select(ReleaseDB).where(ReleaseDB.id == release_id))
+    release_db = result.scalar_one_or_none()
+    
+    if not release_db:
+        raise HTTPException(status_code=404, detail="Release not found")
+    
+    # Update fields if provided
+    if release_data.name is not None:
+        release_db.name = release_data.name
+    if release_data.description is not None:
+        release_db.description = release_data.description
+    if release_data.download_url is not None:
+        release_db.download_url = release_data.download_url
+    
     await db.commit()
     await db.refresh(release_db)
     

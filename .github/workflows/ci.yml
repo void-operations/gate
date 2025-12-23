@@ -44,10 +44,15 @@ jobs:
           # flake8 .
         continue-on-error: true
       
-      - name: Run tests
+      - name: Run backend tests
         run: |
           cd master/backend
-          # pytest .
+          pytest test_deployments_filtering.py -v
+      
+      - name: Run all backend tests
+        run: |
+          cd master/backend
+          pytest . -v --tb=short
         continue-on-error: true
 
   master-frontend:
@@ -93,6 +98,11 @@ jobs:
           cd agent/Program
           dotnet restore
       
+      - name: Run Agent tests
+        run: |
+          cd agent/Tests
+          dotnet test --verbosity normal
+      
       - name: Build Windows x64
         run: |
           cd agent/Program
@@ -129,6 +139,11 @@ jobs:
         run: |
           cd agent/Program
           dotnet restore
+      
+      - name: Run Agent tests
+        run: |
+          cd agent/Tests
+          dotnet test --verbosity normal
       
       - name: Build macOS (${{ matrix.runtime }})
         run: |

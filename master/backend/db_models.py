@@ -1,7 +1,8 @@
 """
 SQLAlchemy database models
 """
-from sqlalchemy import Column, String, DateTime, Text, JSON, Enum as SQLEnum, Index
+from sqlalchemy import Column, String, DateTime, Text, JSON, Enum as SQLEnum, Index, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 from typing import Optional
@@ -63,8 +64,7 @@ class DeploymentDB(Base):
     __tablename__ = "deployments"
 
     id = Column(String, primary_key=True, index=True)
-    agent_id = Column(String, nullable=False, index=True)
-    agent_name = Column(String, nullable=False)
+    agent_id = Column(String, ForeignKey('agents.id', ondelete='CASCADE'), nullable=False, index=True)
     release_ids = Column(JSON, nullable=False)  # List of release IDs
     release_tags = Column(JSON, nullable=False)  # List of release tag names
     status = Column(SQLEnum(DeploymentStatusEnum), nullable=False, default=DeploymentStatusEnum.PENDING)
@@ -72,6 +72,9 @@ class DeploymentDB(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    
+    # Relationship to Agent
+    agent = relationship("AgentDB", backref="deployments")
     
     # Indexes for efficient querying
     # Composite index for common query: WHERE agent_id = ? AND status = ? ORDER BY created_at

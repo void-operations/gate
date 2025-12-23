@@ -43,6 +43,11 @@ class AgentRegister(BaseModel):
     ip_address: Optional[str] = None
 
 
+class AgentUpdate(BaseModel):
+    """Agent update request model"""
+    name: Optional[str] = None
+
+
 class Release(BaseModel):
     """Release model (GitHub Release)"""
     id: str  # GitHub release ID or tag name
@@ -58,6 +63,13 @@ class Release(BaseModel):
 class ReleaseCreate(BaseModel):
     """Release creation request model"""
     github_url: str
+
+
+class ReleaseUpdate(BaseModel):
+    """Release update request model"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    download_url: Optional[str] = None
 
 
 class Deployment(BaseModel):

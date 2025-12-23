@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, Edit, Trash2 } from 'lucide-react'
 
 const API_BASE = 'http://localhost:8000/api'
 
@@ -65,6 +65,15 @@ function App() {
   const [hasGitHubToken, setHasGitHubToken] = useState(false)
   const [showGitHubToken, setShowGitHubToken] = useState(false)
   const [columnFilters, setColumnFilters] = useState([])
+  // Detail view states
+  const [selectedReleaseDetail, setSelectedReleaseDetail] = useState(null)
+  const [selectedAgentDetail, setSelectedAgentDetail] = useState(null)
+  const [selectedDeploymentDetail, setSelectedDeploymentDetail] = useState(null)
+  // Edit mode states
+  const [isEditingRelease, setIsEditingRelease] = useState(false)
+  const [editReleaseForm, setEditReleaseForm] = useState({ name: '', description: '', download_url: '' })
+  const [isEditingAgent, setIsEditingAgent] = useState(false)
+  const [editAgentForm, setEditAgentForm] = useState({ name: '' })
 
   // TanStack Table setup for deployments
   const columnHelper = createColumnHelper()
@@ -97,6 +106,8 @@ function App() {
         header: () => <div className="font-medium">Status</div>,
         cell: (info) => {
           const status = info.getValue()
+          // Capitalize first letter of status
+          const statusDisplay = status ? status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ') : status
           return (
             <span
               className={`px-2 py-1 rounded text-xs font-medium ${
@@ -109,9 +120,14 @@ function App() {
                   : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
               }`}
             >
-              {status}
+              {statusDisplay}
             </span>
           )
+        },
+        filterFn: (row, columnId, filterValue) => {
+          if (!filterValue || filterValue === '__all__') return true
+          const status = row.getValue(columnId)
+          return status === filterValue
         },
       }),
       columnHelper.accessor('created_at', {
@@ -246,6 +262,21 @@ function App() {
     }
   }
 
+  async function updateRelease(releaseId, releaseData) {
+    try {
+      await axios.put(`${API_BASE}/releases/${releaseId}`, releaseData)
+      await loadReleases()
+      setIsEditingRelease(false)
+      // Reload the detail view
+      const response = await axios.get(`${API_BASE}/releases/${releaseId}`)
+      setSelectedReleaseDetail(response.data)
+      alert('Release updated successfully')
+    } catch (error) {
+      console.error('Failed to update release:', error)
+      alert('Failed to update release: ' + (error.response?.data?.detail || error.message))
+    }
+  }
+
   async function deleteAgent(agentId) {
     if (!confirm('Are you sure you want to remove this agent?')) {
       return
@@ -256,6 +287,21 @@ function App() {
     } catch (error) {
       console.error('Failed to delete agent:', error)
       alert('Failed to delete agent')
+    }
+  }
+
+  async function updateAgent(agentId, agentData) {
+    try {
+      await axios.put(`${API_BASE}/agents/${agentId}`, agentData)
+      await loadAgents()
+      setIsEditingAgent(false)
+      // Reload the detail view
+      const response = await axios.get(`${API_BASE}/agents/${agentId}`)
+      setSelectedAgentDetail(response.data)
+      alert('Agent updated successfully')
+    } catch (error) {
+      console.error('Failed to update agent:', error)
+      alert('Failed to update agent: ' + (error.response?.data?.detail || error.message))
     }
   }
 
@@ -406,22 +452,26 @@ function App() {
       <div className="container mx-auto px-4 py-6 flex gap-6">
         {/* Sidebar */}
         <aside className="w-64 flex-shrink-0">
-          <nav className="space-y-1">
+          <nav className="space-y-2 p-2">
             {sections.map((section) => (
               <button
                 key={section.id}
                 onClick={() => {
                   setCurrentSection(section.id)
                   localStorage.setItem('selectedSection', section.id)
+                  // Reset detail views when changing sections
+                  setSelectedReleaseDetail(null)
+                  setSelectedAgentDetail(null)
+                  setSelectedDeploymentDetail(null)
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-left transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all duration-200 ${
                   currentSection === section.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent text-muted-foreground hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'hover:bg-accent text-muted-foreground hover:text-foreground hover:shadow-sm'
                 }`}
               >
                 <span className="text-xl">{section.icon}</span>
-                <span>{section.label}</span>
+                <span className="font-medium">{section.label}</span>
               </button>
             ))}
           </nav>
@@ -431,12 +481,184 @@ function App() {
         <main className="flex-1 min-w-0">
           {currentSection === 'releases' && (
             <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Release Management</h2>
-                <Dialog open={releaseModalOpen} onOpenChange={setReleaseModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button>Add Release</Button>
-                  </DialogTrigger>
+              {selectedReleaseDetail ? (
+                // Detail View
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedReleaseDetail(null)
+                        setIsEditingRelease(false)
+                        setEditReleaseForm({ name: '', description: '', download_url: '' })
+                      }}
+                      className="gap-2"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
+                    </Button>
+                    <h2 className="text-2xl font-bold">Release Details</h2>
+                  </div>
+                  <Card className="shadow-xl">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-2xl">
+                          {isEditingRelease ? (
+                            <Input
+                              value={editReleaseForm.name}
+                              onChange={(e) => setEditReleaseForm({ ...editReleaseForm, name: e.target.value })}
+                              className="text-2xl font-bold"
+                            />
+                          ) : (
+                            selectedReleaseDetail.name
+                          )}
+                        </CardTitle>
+                        <div className="flex gap-2">
+                          {isEditingRelease ? (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setIsEditingRelease(false)
+                                  setEditReleaseForm({ name: '', description: '', download_url: '' })
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  updateRelease(selectedReleaseDetail.id, editReleaseForm)
+                                }}
+                              >
+                                Save
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setIsEditingRelease(true)
+                                  setEditReleaseForm({
+                                    name: selectedReleaseDetail.name || '',
+                                    description: selectedReleaseDetail.description || '',
+                                    download_url: selectedReleaseDetail.download_url || '',
+                                  })
+                                }}
+                                className="gap-2"
+                              >
+                                <Edit className="h-4 w-4" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete ${selectedReleaseDetail.name}?`)) {
+                                    deleteRelease(selectedReleaseDetail.id)
+                                    setSelectedReleaseDetail(null)
+                                  }
+                                }}
+                                className="bg-red-600 hover:bg-red-700 p-2"
+                              >
+                                <Trash2 className="h-4 w-4 text-white" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {isEditingRelease ? (
+                        <>
+                          <div>
+                            <Label className="text-sm font-semibold">Description</Label>
+                            <Textarea
+                              value={editReleaseForm.description}
+                              onChange={(e) => setEditReleaseForm({ ...editReleaseForm, description: e.target.value })}
+                              className="mt-1"
+                              rows={3}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-semibold">GitHub URL</Label>
+                            <Input
+                              value={editReleaseForm.download_url}
+                              onChange={(e) => setEditReleaseForm({ ...editReleaseForm, download_url: e.target.value })}
+                              className="mt-1"
+                              type="url"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {selectedReleaseDetail.description && (
+                            <div>
+                              <Label className="text-sm font-semibold">Description</Label>
+                              <p className="text-sm text-muted-foreground mt-1">{selectedReleaseDetail.description}</p>
+                            </div>
+                          )}
+                          {selectedReleaseDetail.tag_name && (
+                            <div>
+                              <Label className="text-sm font-semibold">Tag Name</Label>
+                              <p className="text-sm text-muted-foreground mt-1">{selectedReleaseDetail.tag_name}</p>
+                            </div>
+                          )}
+                          {selectedReleaseDetail.version && (
+                            <div>
+                              <Label className="text-sm font-semibold">Version</Label>
+                              <p className="text-sm text-muted-foreground mt-1">{selectedReleaseDetail.version}</p>
+                            </div>
+                          )}
+                          {selectedReleaseDetail.release_date && (
+                            <div>
+                              <Label className="text-sm font-semibold">Release Date</Label>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {new Date(selectedReleaseDetail.release_date).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          {selectedReleaseDetail.download_url && (
+                            <div>
+                              <Label className="text-sm font-semibold">GitHub URL</Label>
+                              <a
+                                href={selectedReleaseDetail.download_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary hover:underline block mt-1"
+                              >
+                                {selectedReleaseDetail.download_url}
+                              </a>
+                            </div>
+                          )}
+                          {selectedReleaseDetail.assets && selectedReleaseDetail.assets.length > 0 && (
+                            <div>
+                              <Label className="text-sm font-semibold">Assets</Label>
+                              <ul className="list-disc list-inside text-sm text-muted-foreground mt-1 space-y-1">
+                                {selectedReleaseDetail.assets.map((asset, idx) => (
+                                  <li key={idx}>{asset}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                // List View
+                <div>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold">Release Management</h2>
+                    <Dialog open={releaseModalOpen} onOpenChange={setReleaseModalOpen}>
+                      <DialogTrigger asChild>
+                        <Button>Add Release</Button>
+                      </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Add Release</DialogTitle>
@@ -481,28 +703,36 @@ function App() {
                   <p className="text-muted-foreground">No releases added</p>
                 ) : (
                   releases.map((release) => (
-                    <Card key={release.id} className="flex flex-col">
+                    <Card 
+                      key={release.id} 
+                      className="flex flex-col cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                      onClick={() => {
+                        setSelectedReleaseDetail(release)
+                        setIsEditingRelease(false)
+                        setEditReleaseForm({ name: '', description: '', download_url: '' })
+                      }}
+                    >
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle>{release.name}</CardTitle>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteRelease(release.id)}
-                        >
-                          Remove
-                        </Button>
                       </CardHeader>
                       <CardContent className="flex flex-col flex-1">
                         {release.description && (
-                          <p className="text-sm text-muted-foreground mb-2">{release.description}</p>
+                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{release.description}</p>
                         )}
-                        <div className="mt-auto">
+                        {release.tag_name && (
+                          <p className="text-xs text-muted-foreground mb-2">Tag: {release.tag_name}</p>
+                        )}
+                        {release.version && (
+                          <p className="text-xs text-muted-foreground mb-2">Version: {release.version}</p>
+                        )}
+                        <div className="mt-auto pt-2">
                           {release.download_url && (
                             <a
                               href={release.download_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm text-primary hover:underline block"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               Go to releases
                             </a>
@@ -513,40 +743,175 @@ function App() {
                   ))
                 )}
               </div>
+                </div>
+              )}
             </div>
           )}
 
           {currentSection === 'agents' && (
             <div>
-              <h2 className="text-2xl font-bold mb-6">Agent Management</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {agents.length === 0 ? (
-                  <p className="text-muted-foreground">No agents registered</p>
-                ) : (
-                  agents.map((agent) => (
-                    <Card key={agent.id}>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle>{agent.name}</CardTitle>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteAgent(agent.id)}
-                        >
-                          Remove
-                        </Button>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">Platform: {agent.platform}</p>
-                        <p className="text-sm">
-                          Status: <span className={`font-medium ${agent.status?.toLowerCase() === 'online' ? 'text-green-600' : 'text-red-600'}`}>
-                            {agent.status}
+              {selectedAgentDetail ? (
+                // Detail View
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedAgentDetail(null)
+                        setIsEditingAgent(false)
+                        setEditAgentForm({ name: '' })
+                      }}
+                      className="gap-2"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
+                    </Button>
+                    <h2 className="text-2xl font-bold">Agent Details</h2>
+                  </div>
+                  <Card className="shadow-xl">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-2xl">
+                          {isEditingAgent ? (
+                            <Input
+                              value={editAgentForm.name}
+                              onChange={(e) => setEditAgentForm({ name: e.target.value })}
+                              className="text-2xl font-bold"
+                            />
+                          ) : (
+                            selectedAgentDetail.name
+                          )}
+                        </CardTitle>
+                        <div className="flex gap-2">
+                          {isEditingAgent ? (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setIsEditingAgent(false)
+                                  setEditAgentForm({ name: '' })
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  updateAgent(selectedAgentDetail.id, editAgentForm)
+                                }}
+                              >
+                                Save
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setIsEditingAgent(true)
+                                  setEditAgentForm({ name: selectedAgentDetail.name || '' })
+                                }}
+                                className="gap-2"
+                              >
+                                <Edit className="h-4 w-4" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to remove ${selectedAgentDetail.name}?`)) {
+                                    deleteAgent(selectedAgentDetail.id)
+                                    setSelectedAgentDetail(null)
+                                  }
+                                }}
+                                className="bg-red-600 hover:bg-red-700 p-2"
+                              >
+                                <Trash2 className="h-4 w-4 text-white" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-semibold">Agent ID</Label>
+                        <p className="text-sm text-muted-foreground mt-1 font-mono">{selectedAgentDetail.id}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-semibold">Platform</Label>
+                        <p className="text-sm text-muted-foreground mt-1 capitalize">{selectedAgentDetail.platform}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-semibold">Status</Label>
+                        <p className="text-sm mt-1">
+                          <span className={`font-medium ${selectedAgentDetail.status?.toLowerCase() === 'online' ? 'text-green-600' : selectedAgentDetail.status?.toLowerCase() === 'offline' ? 'text-gray-600' : 'text-red-600'}`}>
+                            {selectedAgentDetail.status ? selectedAgentDetail.status.charAt(0).toUpperCase() + selectedAgentDetail.status.slice(1) : selectedAgentDetail.status}
                           </span>
                         </p>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
+                      </div>
+                      {selectedAgentDetail.version && (
+                        <div>
+                          <Label className="text-sm font-semibold">Version</Label>
+                          <p className="text-sm text-muted-foreground mt-1">{selectedAgentDetail.version}</p>
+                        </div>
+                      )}
+                      {selectedAgentDetail.last_seen && (
+                        <div>
+                          <Label className="text-sm font-semibold">Last Seen</Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {new Date(selectedAgentDetail.last_seen).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                      {selectedAgentDetail.ip_address && (
+                        <div>
+                          <Label className="text-sm font-semibold">IP Address</Label>
+                          <p className="text-sm text-muted-foreground mt-1 font-mono">{selectedAgentDetail.ip_address}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                // List View
+                <div>
+                  <h2 className="text-2xl font-bold mb-6">Agent Management</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {agents.length === 0 ? (
+                      <p className="text-muted-foreground">No agents registered</p>
+                    ) : (
+                      agents.map((agent) => (
+                        <Card 
+                          key={agent.id}
+                          className="cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                          onClick={() => {
+                            setSelectedAgentDetail(agent)
+                            setIsEditingAgent(false)
+                            setEditAgentForm({ name: '' })
+                          }}
+                        >
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle>{agent.name}</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-muted-foreground">Platform: {agent.platform}</p>
+                            <p className="text-sm">
+                              Status: <span className={`font-medium ${agent.status?.toLowerCase() === 'online' ? 'text-green-600' : 'text-red-600'}`}>
+                                {agent.status ? agent.status.charAt(0).toUpperCase() + agent.status.slice(1) : agent.status}
+                              </span>
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -672,12 +1037,108 @@ function App() {
                 </Dialog>
               </div>
               {/* Table Section */}
-              <Card>
-                <CardContent className="pt-6">
-                  {deployments.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-8">No deployments yet</p>
-                  ) : (
-                    <Table>
+              {selectedDeploymentDetail ? (
+                // Detail View
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedDeploymentDetail(null)}
+                      className="gap-2"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
+                    </Button>
+                    <h2 className="text-2xl font-bold">Deployment Details</h2>
+                  </div>
+                  <Card className="shadow-xl">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-2xl">Deployment {selectedDeploymentDetail.id}</CardTitle>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            selectedDeploymentDetail.status === 'success'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                              : selectedDeploymentDetail.status === 'failed'
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                              : selectedDeploymentDetail.status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                          }`}
+                        >
+                          {selectedDeploymentDetail.status ? selectedDeploymentDetail.status.charAt(0).toUpperCase() + selectedDeploymentDetail.status.slice(1).replace('_', ' ') : selectedDeploymentDetail.status}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-semibold">Deployment ID</Label>
+                        <p className="text-sm text-muted-foreground mt-1 font-mono">{selectedDeploymentDetail.id}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-semibold">Agent</Label>
+                        <p className="text-sm text-muted-foreground mt-1">{selectedDeploymentDetail.agent_name}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-semibold">Releases</Label>
+                        <div className="mt-1">
+                          {selectedDeploymentDetail.release_tags && selectedDeploymentDetail.release_tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {selectedDeploymentDetail.release_tags.map((tag, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-secondary text-secondary-foreground rounded text-sm">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No releases</p>
+                          )}
+                        </div>
+                      </div>
+                      {selectedDeploymentDetail.created_at && (
+                        <div>
+                          <Label className="text-sm font-semibold">Created At</Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {new Date(selectedDeploymentDetail.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                      {selectedDeploymentDetail.started_at && (
+                        <div>
+                          <Label className="text-sm font-semibold">Started At</Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {new Date(selectedDeploymentDetail.started_at).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                      {selectedDeploymentDetail.completed_at && (
+                        <div>
+                          <Label className="text-sm font-semibold">Completed At</Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {new Date(selectedDeploymentDetail.completed_at).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                      {selectedDeploymentDetail.error_message && (
+                        <div>
+                          <Label className="text-sm font-semibold text-red-600">Error Message</Label>
+                          <p className="text-sm text-red-600 mt-1 bg-red-50 dark:bg-red-950 p-3 rounded">
+                            {selectedDeploymentDetail.error_message}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                // List View
+                <Card>
+                  <CardContent className="pt-6">
+                    {deployments.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">No deployments yet</p>
+                    ) : (
+                      <Table>
                       <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
                           <TableRow key={headerGroup.id}>
@@ -726,7 +1187,29 @@ function App() {
                               }}
                             />
                           </TableHead>
-                          <TableHead></TableHead>
+                          <TableHead>
+                            <Select
+                              value={table.getColumn('status')?.getFilterValue() || '__all__'}
+                              onValueChange={(value) => {
+                                if (value === '__all__') {
+                                  table.getColumn('status')?.setFilterValue(undefined)
+                                } else {
+                                  table.getColumn('status')?.setFilterValue(value)
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-9 w-full">
+                                <SelectValue placeholder="All statuses" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white">
+                                <SelectItem value="__all__">All statuses</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="success">Success</SelectItem>
+                                <SelectItem value="failed">Failed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableHead>
                           <TableHead>
                             <Input
                               className="h-9"
@@ -743,7 +1226,11 @@ function App() {
                       </TableHeader>
                       <TableBody>
                         {table.getRowModel().rows.map((row) => (
-                          <TableRow key={row.id}>
+                          <TableRow 
+                            key={row.id}
+                            className="cursor-pointer hover:bg-accent/50 transition-all duration-150 active:bg-accent/70"
+                            onClick={() => setSelectedDeploymentDetail(row.original)}
+                          >
                             {row.getVisibleCells().map((cell) => (
                               <TableCell key={cell.id}>
                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -752,10 +1239,11 @@ function App() {
                           </TableRow>
                         ))}
                       </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 

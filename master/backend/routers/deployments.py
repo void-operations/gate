@@ -5,6 +5,7 @@ Deployment Management Routes
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, asc
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
 
@@ -16,16 +17,38 @@ router = APIRouter(prefix="/api/deployments", tags=["deployments"])
 
 
 @router.get("", response_model=List[Deployment])
-async def get_deployments(db: AsyncSession = Depends(get_db)):
-    """List all deployments"""
-    result = await db.execute(select(DeploymentDB))
+async def get_deployments(
+    agent_id: Optional[str] = None,
+    status: Optional[DeploymentStatus] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List all deployments with optional filtering
+    - agent_id: Filter by agent ID
+    - status: Filter by deployment status (pending, in_progress, success, failed)
+    """
+    query = select(DeploymentDB)
+    
+    # Apply filters
+    if agent_id:
+        query = query.where(DeploymentDB.agent_id == agent_id)
+    
+    if status:
+        query = query.where(DeploymentDB.status == DeploymentStatusEnum(status.value))
+    
+    # Order by created_at descending (newest first)
+    query = query.order_by(desc(DeploymentDB.created_at))
+    
+    # Join with Agent to get current agent name
+    query = query.options(selectinload(DeploymentDB.agent))
+    result = await db.execute(query)
     deployments_db = result.scalars().all()
     
     return [
         Deployment(
             id=deployment.id,
             agent_id=deployment.agent_id,
-            agent_name=deployment.agent_name,
+            agent_name=deployment.agent.name if deployment.agent else "Unknown",
             release_ids=deployment.release_ids or [],
             release_tags=deployment.release_tags or [],
             status=DeploymentStatus(deployment.status.value),
@@ -43,6 +66,7 @@ async def get_deployment_history(limit: int = 50, db: AsyncSession = Depends(get
     """Get deployment history"""
     result = await db.execute(
         select(DeploymentDB)
+        .options(selectinload(DeploymentDB.agent))
         .order_by(desc(DeploymentDB.created_at))
         .limit(limit)
     )
@@ -52,7 +76,7 @@ async def get_deployment_history(limit: int = 50, db: AsyncSession = Depends(get
         Deployment(
             id=deployment.id,
             agent_id=deployment.agent_id,
-            agent_name=deployment.agent_name,
+            agent_name=deployment.agent.name if deployment.agent else "Unknown",
             release_ids=deployment.release_ids or [],
             release_tags=deployment.release_tags or [],
             status=DeploymentStatus(deployment.status.value),
@@ -81,6 +105,7 @@ async def get_pending_deployment(agent_id: str, db: AsyncSession = Depends(get_d
     # Get oldest PENDING deployment for this agent
     result = await db.execute(
         select(DeploymentDB)
+        .options(selectinload(DeploymentDB.agent))
         .where(DeploymentDB.agent_id == agent_id)
         .where(DeploymentDB.status == DeploymentStatusEnum.PENDING)
         .order_by(asc(DeploymentDB.created_at))
@@ -100,7 +125,7 @@ async def get_pending_deployment(agent_id: str, db: AsyncSession = Depends(get_d
     return Deployment(
         id=deployment_db.id,
         agent_id=deployment_db.agent_id,
-        agent_name=deployment_db.agent_name,
+        agent_name=deployment_db.agent.name if deployment_db.agent else "Unknown",
         release_ids=deployment_db.release_ids or [],
         release_tags=deployment_db.release_tags or [],
         status=DeploymentStatus(deployment_db.status.value),
@@ -114,7 +139,11 @@ async def get_pending_deployment(agent_id: str, db: AsyncSession = Depends(get_d
 @router.get("/{deployment_id}", response_model=Deployment)
 async def get_deployment(deployment_id: str, db: AsyncSession = Depends(get_db)):
     """Get specific deployment"""
-    result = await db.execute(select(DeploymentDB).where(DeploymentDB.id == deployment_id))
+    result = await db.execute(
+        select(DeploymentDB)
+        .options(selectinload(DeploymentDB.agent))
+        .where(DeploymentDB.id == deployment_id)
+    )
     deployment_db = result.scalar_one_or_none()
     
     if not deployment_db:
@@ -123,7 +152,7 @@ async def get_deployment(deployment_id: str, db: AsyncSession = Depends(get_db))
     return Deployment(
         id=deployment_db.id,
         agent_id=deployment_db.agent_id,
-        agent_name=deployment_db.agent_name,
+        agent_name=deployment_db.agent.name if deployment_db.agent else "Unknown",
         release_ids=deployment_db.release_ids or [],
         release_tags=deployment_db.release_tags or [],
         status=DeploymentStatus(deployment_db.status.value),
@@ -164,7 +193,6 @@ async def create_deployment(deployment_data: DeploymentCreate, db: AsyncSession 
     deployment_db = DeploymentDB(
         id=deployment_id,
         agent_id=deployment_data.agent_id,
-        agent_name=agent_db.name,
         release_ids=deployment_data.release_ids,
         release_tags=release_tags,
         status=DeploymentStatusEnum.PENDING,
@@ -175,13 +203,16 @@ async def create_deployment(deployment_data: DeploymentCreate, db: AsyncSession 
     await db.commit()
     await db.refresh(deployment_db)
     
+    # Load agent relationship for response
+    await db.refresh(deployment_db, ['agent'])
+    
     # Deployment is created in PENDING state
     # Agent will poll /api/deployments/pending/{agent_id} to retrieve and execute it
     
     return Deployment(
         id=deployment_db.id,
         agent_id=deployment_db.agent_id,
-        agent_name=deployment_db.agent_name,
+        agent_name=deployment_db.agent.name if deployment_db.agent else "Unknown",
         release_ids=deployment_db.release_ids or [],
         release_tags=deployment_db.release_tags or [],
         status=DeploymentStatus(deployment_db.status.value),

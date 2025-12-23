@@ -8,4 +8,5 @@ alwaysApply: true
 * Selecting sidebar items displays detailed content in main frame
 * Clean up unused CSS files
 * List view and card view should navigate to Detail screen on click
-  * Detail screen should allow information modification and deletion
+  * Detail screen should allow information modification (edit) and deletion
+  * Edit functionality must be available in detail views

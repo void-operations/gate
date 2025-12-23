@@ -714,7 +714,11 @@ class Program
 
             if (response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"✓ Deployment status reported: {status}");
+                // Capitalize first letter of status for display
+                var statusDisplay = !string.IsNullOrEmpty(status) 
+                    ? char.ToUpper(status[0]) + (status.Length > 1 ? status.Substring(1) : "") 
+                    : status;
+                Console.WriteLine($"✓ Deployment status reported: {statusDisplay}");
             }
             else
             {

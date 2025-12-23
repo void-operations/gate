@@ -11,7 +11,7 @@ import uuid
 
 from database import get_db
 from db_models import AgentDB, AgentStatusEnum
-from models import Agent, AgentRegister, AgentStatus
+from models import Agent, AgentRegister, AgentUpdate, AgentStatus
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -141,6 +141,40 @@ async def register_agent(agent_data: AgentRegister, db: AsyncSession = Depends(g
             last_seen=agent_db.last_seen,
             ip_address=agent_db.ip_address,
         )
+
+
+@router.put("/{agent_id}", response_model=Agent)
+async def update_agent(
+    agent_id: str,
+    agent_data: AgentUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an agent"""
+    result = await db.execute(select(AgentDB).where(AgentDB.id == agent_id))
+    agent_db = result.scalar_one_or_none()
+    
+    if not agent_db:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # Update name if provided
+    if agent_data.name is not None:
+        agent_db.name = agent_data.name
+    
+    await db.commit()
+    await db.refresh(agent_db)
+    
+    # Check and update status based on last_seen
+    current_status = await _get_agent_status(agent_db, db)
+    
+    return Agent(
+        id=agent_db.id,
+        name=agent_db.name,
+        platform=agent_db.platform,
+        version=agent_db.version,
+        status=AgentStatus(current_status.value),
+        last_seen=agent_db.last_seen,
+        ip_address=agent_db.ip_address,
+    )
 
 
 @router.delete("/{agent_id}")
